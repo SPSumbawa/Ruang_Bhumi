@@ -12,7 +12,6 @@
   />
   
   <style>
-    /* CSS sebelumnya (dipotong untuk hemat space) - silakan copy dari kode sebelumnya */
     * {
       box-sizing: border-box;
     }
@@ -306,7 +305,7 @@
     }
 
     .basemap-control-body.expanded {
-      max-height: 300px;
+      max-height: 200px;
       padding: 10px;
     }
 
@@ -897,19 +896,22 @@
       tapTolerance: 15
     }).setView([-8.4895, 117.4183], 12);
 
-    // Variabel state
     let isBhumiLayerActive = true;
     let isRTRWLayerActive = false;
     let isRDTRLayerActive = false;
     let isHutanLayerActive = false;
+
     let highlightLayer = null;
     let currentPersilFeatures = [];
     let currentPersilIndex = 0;
     let currentPopup = null;
     let isLayerControlExpanded = false;
     let isBasemapControlExpanded = false;
+
     let locationMarker = null;
     let locationCircle = null;
+    let currentBasemap = 'osm';
+
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     // ========== MODAL LOKASI ==========
@@ -917,6 +919,7 @@
       document.getElementById('location-modal').classList.add('hidden');
       localStorage.setItem('locationPermissionAsked', 'true');
     };
+
     window.requestLocation = function() {
       document.getElementById('location-modal').classList.add('hidden');
       localStorage.setItem('locationPermissionAsked', 'true');
@@ -929,30 +932,39 @@
       }, 1000);
     }
 
-    // ========== BASEMAPS ==========
+    // ========== BASEMAPS dengan z-index paling rendah ==========
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 22, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap', zIndex: 1
+      maxZoom: 22,
+      maxNativeZoom: 19,
+      attribution: '&copy; OpenStreetMap',
+      zIndex: 1  // Z-index paling rendah
     }).addTo(map);
 
+    const googleSat = L.tileLayer(
+      'https://www.google.com/maps/vt/lyrs=s&x={x}&y={y}&z={z}',
+      {
+        maxZoom: 22,
+        attribution: '&copy; <a href="https://www.google.com/maps">Google</a>',
+        zIndex: 1
+      }
+    );
+
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 22, attribution: 'Esri', zIndex: 1
+      maxZoom: 22,
+      attribution: 'Esri',
+      zIndex: 1  // Z-index paling rendah
     });
 
-    const esriHybridLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-      zIndex: 15
-    });
-
-    const esriHybrid = L.layerGroup([satellite, esriHybridLabels]);
-
-    const googleHybrid = L.tileLayer('https://www.google.com/maps/vt/lyrs=y&x={x}&y={y}&z={z}', {
-      maxZoom: 22, attribution: 'Google Hybrid - <b>Pelanggaran ToS</b>', zIndex: 1
-    });
-
-    // ========== LAYERS ==========
+    // ========== LAYERS dengan z-index lebih tinggi ==========
     const bhumiLayer = L.tileLayer.wms('https://bhumi.atrbpn.go.id/mprx/service?', {
-      layers: 'bhumi_persil', format: 'image/png', transparent: true,
-      version: '1.3.0', crs: L.CRS.EPSG3857, maxZoom: 22,
-      opacity: 0.8, zIndex: 10
+      layers: 'bhumi_persil',
+      format: 'image/png',
+      transparent: true,
+      version: '1.3.0',
+      crs: L.CRS.EPSG3857,
+      maxZoom: 22,
+      opacity: 0.8,
+      zIndex: 10  // Z-index lebih tinggi dari basemap
     }).addTo(map);
 
     L.TileLayer.ArcGISExport = L.TileLayer.extend({
@@ -970,13 +982,18 @@
         const seMerc = this._project(se);
         const bbox = [nwMerc.x, seMerc.y, seMerc.x, nwMerc.y].join(',');
         const params = {
-          bbox, bboxSR: 102100, imageSR: 102100,
-          size: `${tileSize},${tileSize}`, dpi: 96,
-          format: 'png', transparent: true, f: 'image',
+          bbox: bbox,
+          bboxSR: 102100,
+          imageSR: 102100,
+          size: tileSize + ',' + tileSize,
+          dpi: 96,
+          format: 'png',
+          transparent: true,
+          f: 'image',
           layers: this.options.layerDefs || 'show:0'
         };
-        const queryString = Object.keys(params).map(key => `${key}=${params[key]}`).join('&');
-        return `${this._url}?${queryString}`;
+        const queryString = Object.keys(params).map(key => key + '=' + params[key]).join('&');
+        return this._url + '?' + queryString;
       },
       _project: function(latlng) {
         const earthRadius = 6378137;
@@ -987,7 +1004,9 @@
       }
     });
 
-    L.tileLayer.arcgisExport = (url, options) => new L.TileLayer.ArcGISExport(url, options);
+    L.tileLayer.arcgisExport = function(url, options) {
+      return new L.TileLayer.ArcGISExport(url, options);
+    };
 
     const rtrwLayer = L.tileLayer.arcgisExport(
       'https://gistaru.atrbpn.go.id/proxy_rtronline/run.ashx?https://gistaru.atrbpn.go.id/arcgis/rest/services/027_RTR_KABUPATEN_KOTA_PROVINSI_NUSA_TENGGARA_BARAT/_5200_NUSA_TENGGARA_BARAT_PR_PERDA/MapServer/export',
@@ -1004,15 +1023,67 @@
       { maxZoom: 22, opacity: 0.6, zIndex: 13 }
     );
 
-    // ========== GEOLOCATION & CONTROLS ==========
+    // ========== FUNGSI SWITCH BASEMAP dengan FORCE Z-INDEX ==========
+    window.switchBasemap = function(basemapName) {
+      document.getElementById('basemap-osm').classList.remove('active');
+      document.getElementById('basemap-satellite').classList.remove('active');
+      document.getElementById('basemap-google').classList.remove('active');
+      document.getElementById('basemap-' + basemapName).classList.add('active');
+      document.getElementById('radio-' + basemapName).checked = true;
+      
+      if (basemapName === 'osm') {
+        if (map.hasLayer(satellite)) map.removeLayer(satellite);
+        if (map.hasLayer(googleSat)) map.removeLayer(googleSat);
+        if (!map.hasLayer(osm)) map.addLayer(osm);
+
+        osm.setZIndex(1);
+        if (map.hasLayer(bhumiLayer)) bhumiLayer.setZIndex(10);
+        if (map.hasLayer(rtrwLayer)) rtrwLayer.setZIndex(11);
+        if (map.hasLayer(rdtrLayer)) rdtrLayer.setZIndex(12);
+        if (map.hasLayer(hutanLayer)) hutanLayer.setZIndex(13);
+
+        currentBasemap = 'osm';
+
+      } else if (basemapName === 'satellite') {
+        if (map.hasLayer(osm)) map.removeLayer(osm);
+        if (map.hasLayer(googleSat)) map.removeLayer(googleSat);
+        if (!map.hasLayer(satellite)) map.addLayer(satellite);
+
+        satellite.setZIndex(1);
+        if (map.hasLayer(bhumiLayer)) bhumiLayer.setZIndex(10);
+        if (map.hasLayer(rtrwLayer)) rtrwLayer.setZIndex(11);
+        if (map.hasLayer(rdtrLayer)) rdtrLayer.setZIndex(12);
+        if (map.hasLayer(hutanLayer)) hutanLayer.setZIndex(13);
+
+        currentBasemap = 'satellite';
+
+      } else if (basemapName === 'google') {
+        if (map.hasLayer(osm)) map.removeLayer(osm);
+        if (map.hasLayer(satellite)) map.removeLayer(satellite);
+        if (!map.hasLayer(googleSat)) map.addLayer(googleSat);
+
+        googleSat.setZIndex(1);
+        if (map.hasLayer(bhumiLayer)) bhumiLayer.setZIndex(10);
+        if (map.hasLayer(rtrwLayer)) rtrwLayer.setZIndex(11);
+        if (map.hasLayer(rdtrLayer)) rdtrLayer.setZIndex(12);
+        if (map.hasLayer(hutanLayer)) hutanLayer.setZIndex(13);
+
+        currentBasemap = 'google';
+      }
+    };
+
+
+    // ========== GEOLOCATION CONTROL ==========
     L.Control.Locate = L.Control.extend({
       options: { position: 'topleft' },
       onAdd: function(map) {
         const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-locate');
         const link = L.DomUtil.create('a', '', container);
-        link.href = '#'; link.title = 'Lokasi Saya';
-        link.innerHTML = '📍'; link.id = 'locate-btn';
-        L.DomEvent.on(link, 'click', e => {
+        link.href = '#';
+        link.title = 'Lokasi Saya';
+        link.innerHTML = '📍';
+        link.id = 'locate-btn';
+        L.DomEvent.on(link, 'click', function(e) {
           L.DomEvent.preventDefault(e);
           L.DomEvent.stopPropagation(e);
           getLocation();
@@ -1031,79 +1102,128 @@
       }
       btn.classList.add('loading');
       navigator.geolocation.getCurrentPosition(
-        position => {
-          const { latitude: lat, longitude: lng, accuracy } = position.coords;
+        function(position) {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const accuracy = position.coords.accuracy;
           if (locationMarker) map.removeLayer(locationMarker);
           if (locationCircle) map.removeLayer(locationCircle);
           const locationIcon = L.divIcon({
             className: 'location-marker',
             html: '<div class="location-pulse"></div>',
-            iconSize: [20, 20], iconAnchor: [10, 10]
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
           });
           locationMarker = L.marker([lat, lng], { icon: locationIcon, zIndex: 1000 }).addTo(map);
           locationCircle = L.circle([lat, lng], {
-            radius: accuracy, color: '#4285f4', fillColor: '#4285f4',
-            fillOpacity: 0.15, weight: 2, zIndex: 999
+            radius: accuracy,
+            color: '#4285f4',
+            fillColor: '#4285f4',
+            fillOpacity: 0.15,
+            weight: 2,
+            zIndex: 999
           }).addTo(map);
           map.setView([lat, lng], 16);
           locationMarker.bindPopup(`
             <div style="text-align: center;">
               <strong>📍 Lokasi Anda</strong><br>
-              <small>Akurasi: ±${Math.round(accuracy)}m</small>
+              <small>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}<br>Akurasi: ±${Math.round(accuracy)}m</small>
             </div>
           `).openPopup();
           btn.classList.remove('loading');
           btn.classList.add('active');
           setTimeout(() => btn.classList.remove('active'), 3000);
         },
-        error => {
+        function(error) {
           btn.classList.remove('loading');
-          let msg = '';
+          let errorMessage = '';
           switch(error.code) {
-            case error.PERMISSION_DENIED: msg = 'Izin lokasi ditolak.'; break;
-            case error.POSITION_UNAVAILABLE: msg = 'Lokasi tidak tersedia.'; break;
-            case error.TIMEOUT: msg = 'Request timeout.'; break;
-            default: msg = 'Error tidak diketahui.';
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Izin lokasi ditolak. Silakan aktifkan di pengaturan browser.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Lokasi tidak tersedia.';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Request timeout.';
+              break;
+            default:
+              errorMessage = 'Error tidak diketahui.';
           }
-          alert('Error: ' + msg);
+          alert('Error: ' + errorMessage);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     }
 
+    // ========== CUSTOM LAYER CONTROL ==========
     L.Control.CustomLayers = L.Control.extend({
       options: { position: 'topleft' },
       onAdd: function(map) {
         const container = L.DomUtil.create('div', 'leaflet-control custom-layer-control');
         container.innerHTML = `
           <div class="layer-control-header" onclick="toggleLayerControl()">
-            <span>🗂️ Layer</span><span class="toggle-icon" id="layer-toggle-icon">▼</span>
+            <span>🗂️ Layer</span>
+            <span class="toggle-icon" id="layer-toggle-icon">▼</span>
           </div>
           <div class="layer-control-body" id="layer-control-body">
+            
             <div class="layer-item active" id="layer-persil">
               <div class="layer-item-header" onclick="toggleLayer('persil')">
-                <input type="checkbox" class="layer-checkbox" id="check-persil" checked onchange="toggleLayer('persil')"><span class="layer-name">📍 Persil Tanah</span>
+                <input type="checkbox" class="layer-checkbox" id="check-persil" checked onchange="toggleLayer('persil')">
+                <span class="layer-name">📍 Persil Tanah</span>
               </div>
-              <div class="layer-opacity"><div class="opacity-slider-container"><label>Opacity:</label><input type="range" id="opacity-persil" min="0" max="100" value="80"><span class="opacity-value" id="value-persil">80%</span></div></div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-persil" min="0" max="100" value="80">
+                  <span class="opacity-value" id="value-persil">80%</span>
+                </div>
+              </div>
             </div>
+
             <div class="layer-item" id="layer-rtrw">
               <div class="layer-item-header" onclick="toggleLayer('rtrw')">
-                <input type="checkbox" class="layer-checkbox" id="check-rtrw" onchange="toggleLayer('rtrw')"><span class="layer-name">🏛️ RTRW</span>
+                <input type="checkbox" class="layer-checkbox" id="check-rtrw" onchange="toggleLayer('rtrw')">
+                <span class="layer-name">🏛️ RTRW</span>
               </div>
-              <div class="layer-opacity"><div class="opacity-slider-container"><label>Opacity:</label><input type="range" id="opacity-rtrw" min="0" max="100" value="60"><span class="opacity-value" id="value-rtrw">60%</span></div></div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-rtrw" min="0" max="100" value="60">
+                  <span class="opacity-value" id="value-rtrw">60%</span>
+                </div>
+              </div>
             </div>
+
             <div class="layer-item" id="layer-rdtr">
               <div class="layer-item-header" onclick="toggleLayer('rdtr')">
-                <input type="checkbox" class="layer-checkbox" id="check-rdtr" onchange="toggleLayer('rdtr')"><span class="layer-name">🏙️ RDTR</span>
+                <input type="checkbox" class="layer-checkbox" id="check-rdtr" onchange="toggleLayer('rdtr')">
+                <span class="layer-name">🏙️ RDTR</span>
               </div>
-              <div class="layer-opacity"><div class="opacity-slider-container"><label>Opacity:</label><input type="range" id="opacity-rdtr" min="0" max="100" value="60"><span class="opacity-value" id="value-rdtr">60%</span></div></div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-rdtr" min="0" max="100" value="60">
+                  <span class="opacity-value" id="value-rdtr">60%</span>
+                </div>
+              </div>
             </div>
+
             <div class="layer-item" id="layer-hutan">
               <div class="layer-item-header" onclick="toggleLayer('hutan')">
-                <input type="checkbox" class="layer-checkbox" id="check-hutan" onchange="toggleLayer('hutan')"><span class="layer-name">🌲 Kawasan Hutan</span>
+                <input type="checkbox" class="layer-checkbox" id="check-hutan" onchange="toggleLayer('hutan')">
+                <span class="layer-name">🌲 Kawasan Hutan</span>
               </div>
-              <div class="layer-opacity"><div class="opacity-slider-container"><label>Opacity:</label><input type="range" id="opacity-hutan" min="0" max="100" value="60"><span class="opacity-value" id="value-hutan">60%</span></div></div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-hutan" min="0" max="100" value="60">
+                  <span class="opacity-value" id="value-hutan">60%</span>
+                </div>
+              </div>
             </div>
+
           </div>
         `;
         L.DomEvent.disableClickPropagation(container);
@@ -1114,30 +1234,33 @@
 
     new L.Control.CustomLayers().addTo(map);
 
+    // ========== BASEMAP CONTROL ==========
     L.Control.Basemap = L.Control.extend({
       options: { position: 'topleft' },
       onAdd: function(map) {
         const container = L.DomUtil.create('div', 'leaflet-control basemap-control');
         container.innerHTML = `
           <div class="basemap-control-header" onclick="toggleBasemapControl()">
-            <span>🗺️ Peta Dasar</span><span class="toggle-icon" id="basemap-toggle-icon">▼</span>
+            <span>🗺️ Peta Dasar</span>
+            <span class="toggle-icon" id="basemap-toggle-icon">▼</span>
           </div>
           <div class="basemap-control-body" id="basemap-control-body">
+            
             <div class="basemap-item active" id="basemap-osm" onclick="switchBasemap('osm')">
-              <input type="radio" name="basemap" id="radio-osm" checked><label for="radio-osm">🗺️ OpenStreetMap</label>
+              <input type="radio" name="basemap" id="radio-osm" checked>
+              <label for="radio-osm">🗺️ OpenStreetMap</label>
             </div>
+
+            <div class="basemap-item" id="basemap-google" onclick="switchBasemap('google')">
+              <input type="radio" name="basemap" id="radio-google">
+              <label for="radio-google">🛰️ Google Satellite</label>
+            </div>
+
             <div class="basemap-item" id="basemap-satellite" onclick="switchBasemap('satellite')">
               <input type="radio" name="basemap" id="radio-satellite">
-              <label for="radio-satellite">🛰️ Esri Satellite</label>
+              <label for="radio-satellite">🛰️ Satellite</label>
             </div>
-            <div class="basemap-item" id="basemap-esri-hybrid" onclick="switchBasemap('esri-hybrid')">
-              <input type="radio" name="basemap" id="radio-esri-hybrid">
-              <label for="radio-esri-hybrid">🛰️ Esri Hybrid</label>
-            </div>
-            <div class="basemap-item" id="basemap-google-hybrid" onclick="switchBasemap('google-hybrid')">
-              <input type="radio" name="basemap" id="radio-google-hybrid">
-              <label for="radio-google-hybrid">🛰️ Google Hybrid (⚠️)</label>
-            </div>
+
           </div>
         `;
         L.DomEvent.disableClickPropagation(container);
@@ -1145,101 +1268,155 @@
         return container;
       }
     });
-    
+
     new L.Control.Basemap().addTo(map);
-    
+
+    // ========== TOGGLE FUNCTIONS ==========
     window.toggleLayerControl = function() {
       isLayerControlExpanded = !isLayerControlExpanded;
-      document.getElementById('layer-control-body').classList.toggle('expanded', isLayerControlExpanded);
-      document.getElementById('layer-toggle-icon').classList.toggle('expanded', isLayerControlExpanded);
+      const body = document.getElementById('layer-control-body');
+      const icon = document.getElementById('layer-toggle-icon');
+      if (isLayerControlExpanded) {
+        body.classList.add('expanded');
+        icon.classList.add('expanded');
+      } else {
+        body.classList.remove('expanded');
+        icon.classList.remove('expanded');
+      }
     };
 
     window.toggleBasemapControl = function() {
       isBasemapControlExpanded = !isBasemapControlExpanded;
-      document.getElementById('basemap-control-body').classList.toggle('expanded', isBasemapControlExpanded);
-      document.getElementById('basemap-toggle-icon').classList.toggle('expanded', isBasemapControlExpanded);
-    };
-
-    window.switchBasemap = function(basemapName) {
-      document.querySelectorAll('.basemap-item').forEach(item => item.classList.remove('active'));
-      document.getElementById(`basemap-${basemapName}`).classList.add('active');
-      document.getElementById(`radio-${basemapName}`).checked = true;
-
-      [osm, satellite, esriHybrid, googleHybrid].forEach(bm => {
-        if (map.hasLayer(bm)) map.removeLayer(bm);
-      });
-      
-      switch(basemapName) {
-        case 'osm': map.addLayer(osm); break;
-        case 'satellite': map.addLayer(satellite); break;
-        case 'esri-hybrid': map.addLayer(esriHybrid); break;
-        case 'google-hybrid': map.addLayer(googleHybrid); break;
+      const body = document.getElementById('basemap-control-body');
+      const icon = document.getElementById('basemap-toggle-icon');
+      if (isBasemapControlExpanded) {
+        body.classList.add('expanded');
+        icon.classList.add('expanded');
+      } else {
+        body.classList.remove('expanded');
+        icon.classList.remove('expanded');
       }
-      
-      [osm, satellite, googleHybrid].forEach(bm => bm.setZIndex(1));
-      esriHybrid.getLayers().forEach(l => l.setZIndex(1));
-      esriHybridLabels.setZIndex(15);
-      
-      [bhumiLayer, rtrwLayer, rdtrLayer, hutanLayer].forEach((layer, i) => {
-        if (map.hasLayer(layer)) layer.setZIndex(10 + i);
-      });
     };
 
     window.toggleLayer = function(layerName) {
       const checkbox = document.getElementById('check-' + layerName);
-      if (event.target.type !== 'checkbox') checkbox.checked = !checkbox.checked;
-      const isActive = checkbox.checked;
-      document.getElementById('layer-' + layerName).classList.toggle('active', isActive);
-
-      const layers = {
-        persil: { layer: bhumiLayer, state: 'isBhumiLayerActive', zIndex: 10 },
-        rtrw: { layer: rtrwLayer, state: 'isRTRWLayerActive', zIndex: 11 },
-        rdtr: { layer: rdtrLayer, state: 'isRDTRLayerActive', zIndex: 12 },
-        hutan: { layer: hutanLayer, state: 'isHutanLayerActive', zIndex: 13 }
-      };
-
-      window[layers[layerName].state] = isActive;
-
-      if (isActive) {
-        map.addLayer(layers[layerName].layer);
-        layers[layerName].layer.setZIndex(layers[layerName].zIndex);
-      } else {
-        map.removeLayer(layers[layerName].layer);
+      const layerItem = document.getElementById('layer-' + layerName);
+      
+      if (event.target.type !== 'checkbox') {
+        checkbox.checked = !checkbox.checked;
       }
+      
+      const isActive = checkbox.checked;
+      
+      if (isActive) {
+        layerItem.classList.add('active');
+      } else {
+        layerItem.classList.remove('active');
+      }
+      
+      switch(layerName) {
+        case 'persil':
+          isBhumiLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(bhumiLayer);
+            bhumiLayer.setZIndex(10);
+          } else {
+            map.removeLayer(bhumiLayer);
+          }
+          break;
+        case 'rtrw':
+          isRTRWLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(rtrwLayer);
+            rtrwLayer.setZIndex(11);
+          } else {
+            map.removeLayer(rtrwLayer);
+          }
+          break;
+        case 'rdtr':
+          isRDTRLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(rdtrLayer);
+            rdtrLayer.setZIndex(12);
+          } else {
+            map.removeLayer(rdtrLayer);
+          }
+          break;
+        case 'hutan':
+          isHutanLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(hutanLayer);
+            hutanLayer.setZIndex(13);
+          } else {
+            map.removeLayer(hutanLayer);
+          }
+          break;
+      }
+      
       updateMapCursor();
     };
 
+    // Opacity sliders
     setTimeout(() => {
-      document.getElementById('opacity-persil').addEventListener('input', e => {
-        bhumiLayer.setOpacity(e.target.value / 100);
-        document.getElementById('value-persil').textContent = `${e.target.value}%`;
+      document.getElementById('opacity-persil').addEventListener('input', function(e) {
+        const value = e.target.value;
+        bhumiLayer.setOpacity(value / 100);
+        document.getElementById('value-persil').textContent = value + '%';
       });
-      document.getElementById('opacity-rtrw').addEventListener('input', e => {
-        rtrwLayer.setOpacity(e.target.value / 100);
-        document.getElementById('value-rtrw').textContent = `${e.target.value}%`;
+
+      document.getElementById('opacity-rtrw').addEventListener('input', function(e) {
+        const value = e.target.value;
+        rtrwLayer.setOpacity(value / 100);
+        document.getElementById('value-rtrw').textContent = value + '%';
       });
-      document.getElementById('opacity-rdtr').addEventListener('input', e => {
-        rdtrLayer.setOpacity(e.target.value / 100);
-        document.getElementById('value-rdtr').textContent = `${e.target.value}%`;
+
+      document.getElementById('opacity-rdtr').addEventListener('input', function(e) {
+        const value = e.target.value;
+        rdtrLayer.setOpacity(value / 100);
+        document.getElementById('value-rdtr').textContent = value + '%';
       });
-      document.getElementById('opacity-hutan').addEventListener('input', e => {
-        hutanLayer.setOpacity(e.target.value / 100);
-        document.getElementById('value-hutan').textContent = `${e.target.value}%`;
+
+      document.getElementById('opacity-hutan').addEventListener('input', function(e) {
+        const value = e.target.value;
+        hutanLayer.setOpacity(value / 100);
+        document.getElementById('value-hutan').textContent = value + '%';
       });
     }, 100);
-    
+
     // ========== LEGEND ==========
     const legend = L.control({ position: "bottomright" });
+
     legend.onAdd = function () {
       const div = L.DomUtil.create("div", "legend-wms");
       const bhumiLegendUrl = "https://bhumi.atrbpn.go.id/expapi/bhumigs/umum/wms?SERVICE=WMS&REQUEST=GetLegendGraphic&VERSION=1.3.0&FORMAT=image/png&WIDTH=12&HEIGHT=12&LAYER=umum:Persil&STYLE=&LEGEND_OPTIONS=fontName:Inter;fontSize:5;dpi:200;bgColor:0xFFFFFF;fontColor:0x353432";
-      div.innerHTML = `<h4>📋 Legenda</h4><img src="${bhumiLegendUrl}" alt="Legenda" onerror="this.style.display='none'">`;
+
+      div.innerHTML = `
+        <h4>📋 Legenda</h4>
+        <img src="${bhumiLegendUrl}" alt="Legenda" onerror="this.style.display='none'">
+      `;
       return div;
     };
+
     legend.addTo(map);
 
-    // Kode Popup, Info Box, dan Scale Control (dipotong untuk hemat space)
-    // Silakan copy dari kode sebelumnya
+    // ========== HELPER FUNCTIONS (dipotong untuk hemat token - silakan copy dari kode sebelumnya) ==========
+    // Saya potong bagian helper functions, query functions, dan popup functions
+    // untuk menghemat space. Silakan copy dari kode sebelumnya mulai dari:
+    // - formatNomorHak
+    // - highlightAndZoomToPersil
+    // - navigatePersil
+    // - createPersilPopupContent
+    // - attachNavigationListeners
+    // - updatePersilPopup
+    // - closeCurrentPopup
+    // - queryBhumiPersil
+    // - queryArcGIS
+    // - queryKawasanHutan
+    // - updateMapCursor
+    // - map.on('click', ...)
+    // - Info box
+    // - Scale control
+
     function formatNomorHak(nomor) {
       if (!nomor) return '-';
       const nomorStr = String(nomor).replace(/\D/g, '');
