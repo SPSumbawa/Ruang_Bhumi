@@ -1,2 +1,1763 @@
-# Ruang_Bhumi
-menampilkan peta tata ruang dari gistaru dan bhumi
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Peta BHUMI & RTRW Sumbawa - ATR/BPN</title>
+
+  <!-- 🟩 CSS Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    #map.clickable {
+      cursor: crosshair;
+    }
+
+    /* Modal Notifikasi Lokasi */
+    .location-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .location-modal.hidden {
+      display: none;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .location-modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 90%;
+      width: 350px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .location-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .location-modal-icon {
+      font-size: 48px;
+    }
+
+    .location-modal-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .location-modal-body {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .location-modal-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .location-modal-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .location-modal-btn.primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .location-modal-btn.primary:active {
+      transform: scale(0.95);
+      opacity: 0.8;
+    }
+
+    .location-modal-btn.secondary {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .location-modal-btn.secondary:active {
+      background: #e0e0e0;
+    }
+
+    /* Custom Layer Control */
+    .custom-layer-control {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .layer-control-header {
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .layer-control-header:active {
+      background: linear-gradient(135deg, #5568d3 0%, #6a4091 100%);
+    }
+
+    .layer-control-header .toggle-icon {
+      font-size: 14px;
+      transition: transform 0.3s ease;
+    }
+
+    .layer-control-header .toggle-icon.expanded {
+      transform: rotate(180deg);
+    }
+
+    .layer-control-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      padding: 0;
+    }
+
+    .layer-control-body.expanded {
+      max-height: 500px;
+      padding: 10px;
+      overflow-y: auto;
+    }
+
+    /* Layer item */
+    .layer-item {
+      margin: 8px 0;
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .layer-item.active {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .layer-item-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .layer-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .layer-name {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .layer-item.active .layer-name {
+      color: #667eea;
+    }
+
+    /* Opacity slider untuk layer */
+    .layer-opacity {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #ddd;
+      display: none;
+    }
+
+    .layer-item.active .layer-opacity {
+      display: block;
+    }
+
+    .opacity-slider-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .opacity-slider-container label {
+      font-size: 10px;
+      color: #666;
+      min-width: 35px;
+    }
+
+    .opacity-slider-container input[type="range"] {
+      flex: 1;
+      height: 25px;
+    }
+
+    .opacity-slider-container .opacity-value {
+      font-size: 10px;
+      font-weight: bold;
+      color: #667eea;
+      min-width: 35px;
+      text-align: right;
+    }
+
+    /* Basemap Control */
+    .basemap-control {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .basemap-control-header {
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .basemap-control-header:active {
+      background: linear-gradient(135deg, #e082ea 0%, #e4465b 100%);
+    }
+
+    .basemap-control-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      padding: 0;
+    }
+
+    .basemap-control-body.expanded {
+      max-height: 200px;
+      padding: 10px;
+    }
+
+    .basemap-item {
+      padding: 8px;
+      margin: 4px 0;
+      background: #f9f9f9;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      border: 2px solid transparent;
+    }
+
+    .basemap-item:active {
+      background: #e0e0e0;
+    }
+
+    .basemap-item.active {
+      border-color: #f093fb;
+      background: #fff0f9;
+    }
+
+    .basemap-item input[type="radio"] {
+      width: 18px;
+      height: 18px;
+    }
+
+    .basemap-item label {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      cursor: pointer;
+    }
+
+    /* Legend */
+    .legend-wms {
+      background: white;
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .legend-wms h4 {
+      margin: 5px 0;
+      font-size: 11px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 3px;
+    }
+
+    .legend-wms img {
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: 150px;
+    }
+
+    /* Geolocation Button */
+    .leaflet-control-locate {
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+      cursor: pointer;
+    }
+
+    .leaflet-control-locate a {
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.3s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .leaflet-control-locate a:hover {
+      background: #f4f4f4;
+      color: #667eea;
+    }
+
+    .leaflet-control-locate a:active {
+      background: #e0e0e0;
+    }
+
+    .leaflet-control-locate a.loading {
+      animation: pulse 1.5s infinite;
+    }
+
+    .leaflet-control-locate a.active {
+      color: #4caf50;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Location marker custom */
+    .location-marker {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #4285f4;
+      border: 3px solid white;
+      box-shadow: 0 0 10px rgba(66, 133, 244, 0.5);
+    }
+
+    .location-pulse {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(66, 133, 244, 0.3);
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation: location-pulse 2s infinite;
+    }
+
+    @keyframes location-pulse {
+      0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(2);
+        opacity: 0;
+      }
+    }
+
+    /* Info box */
+    .info-box {
+      background: white;
+      padding: 8px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      font-size: 10px;
+      max-width: 200px;
+    }
+
+    .info-box strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 3px;
+    }
+
+    .info-item {
+      margin: 3px 0;
+      line-height: 1.4;
+    }
+
+    /* Leaflet controls positioning */
+    .leaflet-top.leaflet-right {
+      top: 10px;
+      right: 10px;
+    }
+
+    .leaflet-top.leaflet-left {
+      top: 10px;
+      left: 10px;
+    }
+
+    .leaflet-bottom.leaflet-left {
+      bottom: 10px;
+      left: 10px;
+    }
+
+    .leaflet-bottom.leaflet-right {
+      bottom: 10px;
+      right: 10px;
+    }
+
+    /* Custom Popup Style */
+    .custom-popup .leaflet-popup-content-wrapper {
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      max-height: 70vh;
+      max-width: 95vw;
+      width: auto;
+    }
+
+    .custom-popup .leaflet-popup-content {
+      margin: 0;
+      min-width: 280px;
+      max-width: min(450px, 95vw);
+      font-family: Arial, sans-serif;
+      max-height: 70vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .custom-popup .leaflet-popup-close-button {
+      display: none !important;
+    }
+
+    .custom-popup .leaflet-popup-tip-container {
+      display: none;
+    }
+
+    .popup-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 14px 12px;
+      font-weight: bold;
+      font-size: 15px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-radius: 12px 12px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      touch-action: none;
+    }
+
+    .popup-header .close-btn {
+      cursor: pointer;
+      font-size: 24px;
+      line-height: 1;
+      padding: 5px 10px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+      transition: all 0.3s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .popup-header .close-btn:active {
+      background: rgba(255,255,255,0.4);
+      transform: scale(0.95);
+    }
+
+    .popup-header.rdtr {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .popup-header.hutan {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .popup-header.persil {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .popup-body {
+      padding: 12px;
+      overflow-y: auto;
+      max-height: calc(70vh - 60px);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .popup-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .popup-body::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    .popup-body::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 3px;
+    }
+
+    .popup-row {
+      margin: 8px 0;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .popup-row:last-child {
+      border-bottom: none;
+    }
+
+    .popup-label {
+      font-weight: bold;
+      color: #555;
+      min-width: 100px;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+
+    .popup-value {
+      color: #333;
+      flex: 1;
+      word-wrap: break-word;
+      font-size: 13px;
+    }
+
+    .popup-loading {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+
+    .popup-error {
+      color: #d32f2f;
+      padding: 12px;
+      background: #ffebee;
+      border-radius: 6px;
+      font-size: 13px;
+      margin: 10px 0;
+      line-height: 1.5;
+    }
+
+    .popup-warning {
+      color: #f57c00;
+      padding: 12px;
+      background: #fff3e0;
+      border-radius: 6px;
+      font-size: 13px;
+      margin: 10px 0;
+      line-height: 1.5;
+    }
+
+    .popup-section {
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #eee;
+    }
+
+    .popup-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .popup-section-title {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 10px;
+      font-weight: bold;
+      font-size: 14px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .popup-section-title.rdtr {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .popup-section-title.hutan {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .popup-section-title.persil {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .feature-navigation {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+
+    .nav-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      transition: all 0.2s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      min-width: 50px;
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-btn:active:not(:disabled) {
+      background: #5568d3;
+      transform: scale(0.95);
+    }
+
+    .nav-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .nav-info {
+      font-weight: bold;
+      color: #333;
+      font-size: 14px;
+      flex: 1;
+      text-align: center;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 15px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .scroll-hint {
+      text-align: center;
+      padding: 10px;
+      background: linear-gradient(to top, #f5f5f5, transparent);
+      color: #666;
+      font-size: 12px;
+      border-top: 1px solid #ddd;
+      position: sticky;
+      bottom: 0;
+      backdrop-filter: blur(5px);
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .custom-layer-control, .basemap-control {
+        max-width: calc(100vw - 80px);
+      }
+
+      .info-box {
+        font-size: 9px;
+        padding: 6px;
+        max-width: 170px;
+      }
+
+      .legend-wms {
+        max-width: calc(100vw - 80px);
+        max-height: 250px;
+      }
+
+      .legend-wms img {
+        max-width: 120px;
+      }
+
+      .popup-label {
+        min-width: 85px;
+        font-size: 11px;
+      }
+
+      .popup-value {
+        font-size: 12px;
+      }
+
+      .custom-popup .leaflet-popup-content {
+        min-width: 260px;
+      }
+
+      .leaflet-control-zoom a {
+        width: 36px;
+        height: 36px;
+        line-height: 36px;
+        font-size: 20px;
+      }
+
+      .leaflet-control-locate a {
+        width: 36px;
+        height: 36px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .custom-layer-control, .basemap-control {
+        min-width: 140px;
+      }
+
+      .layer-control-header, .basemap-control-header {
+        font-size: 11px;
+        padding: 8px 10px;
+      }
+
+      .layer-name, .basemap-item label {
+        font-size: 11px;
+      }
+
+      .info-box {
+        font-size: 8px;
+        max-width: 150px;
+      }
+
+      .custom-popup .leaflet-popup-content {
+        min-width: 240px;
+      }
+
+      .popup-header {
+        font-size: 13px;
+        padding: 12px 10px;
+      }
+
+      .nav-btn {
+        min-width: 45px;
+        min-height: 45px;
+        padding: 10px 15px;
+        font-size: 16px;
+      }
+    }
+
+    @media (max-height: 500px) and (orientation: landscape) {
+      .custom-popup .leaflet-popup-content-wrapper {
+        max-height: 85vh;
+      }
+
+      .popup-body {
+        max-height: calc(85vh - 60px);
+      }
+
+      .layer-control-body, .basemap-control-body {
+        max-height: 200px;
+      }
+    }
+
+    button, .nav-btn, .close-btn {
+      -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+      touch-action: manipulation;
+    }
+
+    .popup-header,
+    .feature-navigation,
+    .nav-btn,
+    .layer-control-header,
+    .basemap-control-header,
+    .layer-item-header {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Modal Notifikasi Lokasi -->
+  <div id="location-modal" class="location-modal hidden">
+    <div class="location-modal-content">
+      <div class="location-modal-header">
+        <div class="location-modal-icon">📍</div>
+        <div class="location-modal-title">Izinkan Akses Lokasi</div>
+      </div>
+      <div class="location-modal-body">
+        Aplikasi memerlukan akses lokasi Anda untuk menampilkan posisi Anda di peta dan memberikan pengalaman yang lebih baik.
+      </div>
+      <div class="location-modal-buttons">
+        <button class="location-modal-btn secondary" onclick="dismissLocationModal()">Nanti Saja</button>
+        <button class="location-modal-btn primary" onclick="requestLocation()">Izinkan</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    const map = L.map('map', {
+      maxZoom: 22,
+      zoomControl: true,
+      tap: true,
+      tapTolerance: 15
+    }).setView([-8.4895, 117.4183], 12);
+
+    let isBhumiLayerActive = true;
+    let isRTRWLayerActive = false;
+    let isRDTRLayerActive = false;
+    let isHutanLayerActive = false;
+
+    let highlightLayer = null;
+    let currentPersilFeatures = [];
+    let currentPersilIndex = 0;
+    let currentPopup = null;
+    let isLayerControlExpanded = false;
+    let isBasemapControlExpanded = false;
+
+    let locationMarker = null;
+    let locationCircle = null;
+    let currentBasemap = 'osm';
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // ========== MODAL LOKASI ==========
+    window.dismissLocationModal = function() {
+      document.getElementById('location-modal').classList.add('hidden');
+      localStorage.setItem('locationPermissionAsked', 'true');
+    };
+
+    window.requestLocation = function() {
+      document.getElementById('location-modal').classList.add('hidden');
+      localStorage.setItem('locationPermissionAsked', 'true');
+      getLocation();
+    };
+
+    if (isMobile && !localStorage.getItem('locationPermissionAsked')) {
+      setTimeout(() => {
+        document.getElementById('location-modal').classList.remove('hidden');
+      }, 1000);
+    }
+
+    // ========== BASEMAPS dengan z-index paling rendah ==========
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 22,
+      maxNativeZoom: 19,
+      attribution: '&copy; OpenStreetMap',
+      zIndex: 1  // Z-index paling rendah
+    }).addTo(map);
+
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 22,
+      attribution: 'Esri',
+      zIndex: 1  // Z-index paling rendah
+    });
+
+    // ========== LAYERS dengan z-index lebih tinggi ==========
+    const bhumiLayer = L.tileLayer.wms('https://bhumi.atrbpn.go.id/mprx/service?', {
+      layers: 'bhumi_persil',
+      format: 'image/png',
+      transparent: true,
+      version: '1.3.0',
+      crs: L.CRS.EPSG3857,
+      maxZoom: 22,
+      opacity: 0.8,
+      zIndex: 10  // Z-index lebih tinggi dari basemap
+    }).addTo(map);
+
+    L.TileLayer.ArcGISExport = L.TileLayer.extend({
+      initialize: function(url, options) {
+        this._url = url;
+        L.TileLayer.prototype.initialize.call(this, url, options);
+      },
+      getTileUrl: function(coords) {
+        const tileSize = this.options.tileSize;
+        const nwPoint = coords.multiplyBy(tileSize);
+        const sePoint = nwPoint.add([tileSize, tileSize]);
+        const nw = map.unproject(nwPoint, coords.z);
+        const se = map.unproject(sePoint, coords.z);
+        const nwMerc = this._project(nw);
+        const seMerc = this._project(se);
+        const bbox = [nwMerc.x, seMerc.y, seMerc.x, nwMerc.y].join(',');
+        const params = {
+          bbox: bbox,
+          bboxSR: 102100,
+          imageSR: 102100,
+          size: tileSize + ',' + tileSize,
+          dpi: 96,
+          format: 'png',
+          transparent: true,
+          f: 'image',
+          layers: this.options.layerDefs || 'show:0'
+        };
+        const queryString = Object.keys(params).map(key => key + '=' + params[key]).join('&');
+        return this._url + '?' + queryString;
+      },
+      _project: function(latlng) {
+        const earthRadius = 6378137;
+        const lat = Math.max(Math.min(latlng.lat, 89.99999), -89.99999);
+        const x = earthRadius * latlng.lng * Math.PI / 180;
+        const y = earthRadius * Math.log(Math.tan((90 + lat) * Math.PI / 360));
+        return { x: x, y: y };
+      }
+    });
+
+    L.tileLayer.arcgisExport = function(url, options) {
+      return new L.TileLayer.ArcGISExport(url, options);
+    };
+
+    const rtrwLayer = L.tileLayer.arcgisExport(
+      'https://gistaru.atrbpn.go.id/proxy_rtronline/run.ashx?https://gistaru.atrbpn.go.id/arcgis/rest/services/027_RTR_KABUPATEN_KOTA_PROVINSI_NUSA_TENGGARA_BARAT/_5200_NUSA_TENGGARA_BARAT_PR_PERDA/MapServer/export',
+      { opacity: 0.6, tileSize: 512, maxZoom: 22, layerDefs: 'show:3', zIndex: 11 }
+    );
+
+    const rdtrLayer = L.tileLayer.arcgisExport(
+      'https://gistaru.atrbpn.go.id/proxy_rtronline/run.ashx?https://gistaru.atrbpn.go.id/arcgis/rest/services/061_RDTR_PROVINSI_NUSA_TENGGARA_BARAT/_RDTR_52A8_KAWASAN_PERKOTAAN_SUMBAWA_BESAR/MapServer/export',
+      { opacity: 0.6, tileSize: 512, maxZoom: 22, layerDefs: 'show:0', zIndex: 12 }
+    );
+
+    const hutanLayer = L.tileLayer(
+      'https://geoportal.menlhk.go.id/server/rest/services/jsdgejawfvrdtasdt/KWS_HUTAN/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 22, opacity: 0.6, zIndex: 13 }
+    );
+
+    // ========== FUNGSI SWITCH BASEMAP dengan FORCE Z-INDEX ==========
+    window.switchBasemap = function(basemapName) {
+      document.getElementById('basemap-osm').classList.remove('active');
+      document.getElementById('basemap-satellite').classList.remove('active');
+      document.getElementById('basemap-' + basemapName).classList.add('active');
+      document.getElementById('radio-' + basemapName).checked = true;
+      
+      if (basemapName === 'osm') {
+        if (map.hasLayer(satellite)) {
+          map.removeLayer(satellite);
+        }
+        if (!map.hasLayer(osm)) {
+          map.addLayer(osm);
+        }
+        // Force z-index paling bawah
+        osm.setZIndex(1);
+        // Pastikan layer lain tetap di atas
+        if (map.hasLayer(bhumiLayer)) bhumiLayer.setZIndex(10);
+        if (map.hasLayer(rtrwLayer)) rtrwLayer.setZIndex(11);
+        if (map.hasLayer(rdtrLayer)) rdtrLayer.setZIndex(12);
+        if (map.hasLayer(hutanLayer)) hutanLayer.setZIndex(13);
+        
+        currentBasemap = 'osm';
+      } else if (basemapName === 'satellite') {
+        if (map.hasLayer(osm)) {
+          map.removeLayer(osm);
+        }
+        if (!map.hasLayer(satellite)) {
+          map.addLayer(satellite);
+        }
+        // Force z-index paling bawah
+        satellite.setZIndex(1);
+        // Pastikan layer lain tetap di atas
+        if (map.hasLayer(bhumiLayer)) bhumiLayer.setZIndex(10);
+        if (map.hasLayer(rtrwLayer)) rtrwLayer.setZIndex(11);
+        if (map.hasLayer(rdtrLayer)) rdtrLayer.setZIndex(12);
+        if (map.hasLayer(hutanLayer)) hutanLayer.setZIndex(13);
+        
+        currentBasemap = 'satellite';
+      }
+    };
+
+    // ========== GEOLOCATION CONTROL ==========
+    L.Control.Locate = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd: function(map) {
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-locate');
+        const link = L.DomUtil.create('a', '', container);
+        link.href = '#';
+        link.title = 'Lokasi Saya';
+        link.innerHTML = '📍';
+        link.id = 'locate-btn';
+        L.DomEvent.on(link, 'click', function(e) {
+          L.DomEvent.preventDefault(e);
+          L.DomEvent.stopPropagation(e);
+          getLocation();
+        });
+        return container;
+      }
+    });
+
+    new L.Control.Locate().addTo(map);
+
+    function getLocation() {
+      const btn = document.getElementById('locate-btn');
+      if (!navigator.geolocation) {
+        alert('Geolocation tidak didukung');
+        return;
+      }
+      btn.classList.add('loading');
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const accuracy = position.coords.accuracy;
+          if (locationMarker) map.removeLayer(locationMarker);
+          if (locationCircle) map.removeLayer(locationCircle);
+          const locationIcon = L.divIcon({
+            className: 'location-marker',
+            html: '<div class="location-pulse"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          locationMarker = L.marker([lat, lng], { icon: locationIcon, zIndex: 1000 }).addTo(map);
+          locationCircle = L.circle([lat, lng], {
+            radius: accuracy,
+            color: '#4285f4',
+            fillColor: '#4285f4',
+            fillOpacity: 0.15,
+            weight: 2,
+            zIndex: 999
+          }).addTo(map);
+          map.setView([lat, lng], 16);
+          locationMarker.bindPopup(`
+            <div style="text-align: center;">
+              <strong>📍 Lokasi Anda</strong><br>
+              <small>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}<br>Akurasi: ±${Math.round(accuracy)}m</small>
+            </div>
+          `).openPopup();
+          btn.classList.remove('loading');
+          btn.classList.add('active');
+          setTimeout(() => btn.classList.remove('active'), 3000);
+        },
+        function(error) {
+          btn.classList.remove('loading');
+          let errorMessage = '';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Izin lokasi ditolak. Silakan aktifkan di pengaturan browser.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Lokasi tidak tersedia.';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Request timeout.';
+              break;
+            default:
+              errorMessage = 'Error tidak diketahui.';
+          }
+          alert('Error: ' + errorMessage);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    // ========== CUSTOM LAYER CONTROL ==========
+    L.Control.CustomLayers = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd: function(map) {
+        const container = L.DomUtil.create('div', 'leaflet-control custom-layer-control');
+        container.innerHTML = `
+          <div class="layer-control-header" onclick="toggleLayerControl()">
+            <span>🗂️ Layer</span>
+            <span class="toggle-icon" id="layer-toggle-icon">▼</span>
+          </div>
+          <div class="layer-control-body" id="layer-control-body">
+            
+            <div class="layer-item active" id="layer-persil">
+              <div class="layer-item-header" onclick="toggleLayer('persil')">
+                <input type="checkbox" class="layer-checkbox" id="check-persil" checked onchange="toggleLayer('persil')">
+                <span class="layer-name">📍 Persil Tanah</span>
+              </div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-persil" min="0" max="100" value="80">
+                  <span class="opacity-value" id="value-persil">80%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer-item" id="layer-rtrw">
+              <div class="layer-item-header" onclick="toggleLayer('rtrw')">
+                <input type="checkbox" class="layer-checkbox" id="check-rtrw" onchange="toggleLayer('rtrw')">
+                <span class="layer-name">🏛️ RTRW</span>
+              </div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-rtrw" min="0" max="100" value="60">
+                  <span class="opacity-value" id="value-rtrw">60%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer-item" id="layer-rdtr">
+              <div class="layer-item-header" onclick="toggleLayer('rdtr')">
+                <input type="checkbox" class="layer-checkbox" id="check-rdtr" onchange="toggleLayer('rdtr')">
+                <span class="layer-name">🏙️ RDTR</span>
+              </div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-rdtr" min="0" max="100" value="60">
+                  <span class="opacity-value" id="value-rdtr">60%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer-item" id="layer-hutan">
+              <div class="layer-item-header" onclick="toggleLayer('hutan')">
+                <input type="checkbox" class="layer-checkbox" id="check-hutan" onchange="toggleLayer('hutan')">
+                <span class="layer-name">🌲 Kawasan Hutan</span>
+              </div>
+              <div class="layer-opacity">
+                <div class="opacity-slider-container">
+                  <label>Opacity:</label>
+                  <input type="range" id="opacity-hutan" min="0" max="100" value="60">
+                  <span class="opacity-value" id="value-hutan">60%</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        `;
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+        return container;
+      }
+    });
+
+    new L.Control.CustomLayers().addTo(map);
+
+    // ========== BASEMAP CONTROL ==========
+    L.Control.Basemap = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd: function(map) {
+        const container = L.DomUtil.create('div', 'leaflet-control basemap-control');
+        container.innerHTML = `
+          <div class="basemap-control-header" onclick="toggleBasemapControl()">
+            <span>🗺️ Peta Dasar</span>
+            <span class="toggle-icon" id="basemap-toggle-icon">▼</span>
+          </div>
+          <div class="basemap-control-body" id="basemap-control-body">
+            
+            <div class="basemap-item active" id="basemap-osm" onclick="switchBasemap('osm')">
+              <input type="radio" name="basemap" id="radio-osm" checked>
+              <label for="radio-osm">🗺️ OpenStreetMap</label>
+            </div>
+
+            <div class="basemap-item" id="basemap-satellite" onclick="switchBasemap('satellite')">
+              <input type="radio" name="basemap" id="radio-satellite">
+              <label for="radio-satellite">🛰️ Satellite</label>
+            </div>
+
+          </div>
+        `;
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+        return container;
+      }
+    });
+
+    new L.Control.Basemap().addTo(map);
+
+    // ========== TOGGLE FUNCTIONS ==========
+    window.toggleLayerControl = function() {
+      isLayerControlExpanded = !isLayerControlExpanded;
+      const body = document.getElementById('layer-control-body');
+      const icon = document.getElementById('layer-toggle-icon');
+      if (isLayerControlExpanded) {
+        body.classList.add('expanded');
+        icon.classList.add('expanded');
+      } else {
+        body.classList.remove('expanded');
+        icon.classList.remove('expanded');
+      }
+    };
+
+    window.toggleBasemapControl = function() {
+      isBasemapControlExpanded = !isBasemapControlExpanded;
+      const body = document.getElementById('basemap-control-body');
+      const icon = document.getElementById('basemap-toggle-icon');
+      if (isBasemapControlExpanded) {
+        body.classList.add('expanded');
+        icon.classList.add('expanded');
+      } else {
+        body.classList.remove('expanded');
+        icon.classList.remove('expanded');
+      }
+    };
+
+    window.toggleLayer = function(layerName) {
+      const checkbox = document.getElementById('check-' + layerName);
+      const layerItem = document.getElementById('layer-' + layerName);
+      
+      if (event.target.type !== 'checkbox') {
+        checkbox.checked = !checkbox.checked;
+      }
+      
+      const isActive = checkbox.checked;
+      
+      if (isActive) {
+        layerItem.classList.add('active');
+      } else {
+        layerItem.classList.remove('active');
+      }
+      
+      switch(layerName) {
+        case 'persil':
+          isBhumiLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(bhumiLayer);
+            bhumiLayer.setZIndex(10);
+          } else {
+            map.removeLayer(bhumiLayer);
+          }
+          break;
+        case 'rtrw':
+          isRTRWLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(rtrwLayer);
+            rtrwLayer.setZIndex(11);
+          } else {
+            map.removeLayer(rtrwLayer);
+          }
+          break;
+        case 'rdtr':
+          isRDTRLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(rdtrLayer);
+            rdtrLayer.setZIndex(12);
+          } else {
+            map.removeLayer(rdtrLayer);
+          }
+          break;
+        case 'hutan':
+          isHutanLayerActive = isActive;
+          if (isActive) {
+            map.addLayer(hutanLayer);
+            hutanLayer.setZIndex(13);
+          } else {
+            map.removeLayer(hutanLayer);
+          }
+          break;
+      }
+      
+      updateMapCursor();
+    };
+
+    // Opacity sliders
+    setTimeout(() => {
+      document.getElementById('opacity-persil').addEventListener('input', function(e) {
+        const value = e.target.value;
+        bhumiLayer.setOpacity(value / 100);
+        document.getElementById('value-persil').textContent = value + '%';
+      });
+
+      document.getElementById('opacity-rtrw').addEventListener('input', function(e) {
+        const value = e.target.value;
+        rtrwLayer.setOpacity(value / 100);
+        document.getElementById('value-rtrw').textContent = value + '%';
+      });
+
+      document.getElementById('opacity-rdtr').addEventListener('input', function(e) {
+        const value = e.target.value;
+        rdtrLayer.setOpacity(value / 100);
+        document.getElementById('value-rdtr').textContent = value + '%';
+      });
+
+      document.getElementById('opacity-hutan').addEventListener('input', function(e) {
+        const value = e.target.value;
+        hutanLayer.setOpacity(value / 100);
+        document.getElementById('value-hutan').textContent = value + '%';
+      });
+    }, 100);
+
+    // ========== LEGEND ==========
+    const legend = L.control({ position: "bottomright" });
+
+    legend.onAdd = function () {
+      const div = L.DomUtil.create("div", "legend-wms");
+      const bhumiLegendUrl = "https://bhumi.atrbpn.go.id/expapi/bhumigs/umum/wms?SERVICE=WMS&REQUEST=GetLegendGraphic&VERSION=1.3.0&FORMAT=image/png&WIDTH=12&HEIGHT=12&LAYER=umum:Persil&STYLE=&LEGEND_OPTIONS=fontName:Inter;fontSize:5;dpi:200;bgColor:0xFFFFFF;fontColor:0x353432";
+
+      div.innerHTML = `
+        <h4>📋 Legenda</h4>
+        <img src="${bhumiLegendUrl}" alt="Legenda" onerror="this.style.display='none'">
+      `;
+      return div;
+    };
+
+    legend.addTo(map);
+
+    // ========== HELPER FUNCTIONS (dipotong untuk hemat token - silakan copy dari kode sebelumnya) ==========
+    // Saya potong bagian helper functions, query functions, dan popup functions
+    // untuk menghemat space. Silakan copy dari kode sebelumnya mulai dari:
+    // - formatNomorHak
+    // - highlightAndZoomToPersil
+    // - navigatePersil
+    // - createPersilPopupContent
+    // - attachNavigationListeners
+    // - updatePersilPopup
+    // - closeCurrentPopup
+    // - queryBhumiPersil
+    // - queryArcGIS
+    // - queryKawasanHutan
+    // - updateMapCursor
+    // - map.on('click', ...)
+    // - Info box
+    // - Scale control
+
+    function formatNomorHak(nomor) {
+      if (!nomor) return '-';
+      const nomorStr = String(nomor).replace(/\D/g, '');
+      if (nomorStr.length >= 14) {
+        return `${nomorStr.substring(0, 8)}.${nomorStr.substring(8, 9)}.${nomorStr.substring(9, 14)}`;
+      } else if (nomorStr.length >= 9) {
+        return `${nomorStr.substring(0, 8)}.${nomorStr.substring(8, 9)}.${nomorStr.substring(9)}`;
+      }
+      return nomor;
+    }
+
+    function highlightAndZoomToPersil(feature) {
+      if (highlightLayer) map.removeLayer(highlightLayer);
+      if (feature.geometry) {
+        highlightLayer = L.geoJSON(feature, {
+          style: {
+            fillColor: 'transparent',
+            color: '#ff0000',
+            weight: 4,
+            opacity: 1,
+            dashArray: '10, 5'
+          }
+        }).addTo(map);
+        if (highlightLayer.setZIndex) highlightLayer.setZIndex(999);
+        const bounds = highlightLayer.getBounds();
+        map.fitBounds(bounds, {
+          padding: isMobile ? [30, 30] : [50, 50],
+          maxZoom: 18
+        });
+      }
+    }
+
+    window.navigatePersil = function(direction) {
+      let newIndex = currentPersilIndex;
+      if (direction === 'prev' && currentPersilIndex > 0) {
+        newIndex = currentPersilIndex - 1;
+      } else if (direction === 'next' && currentPersilIndex < currentPersilFeatures.length - 1) {
+        newIndex = currentPersilIndex + 1;
+      }
+      if (newIndex !== currentPersilIndex) {
+        updatePersilPopup(newIndex);
+      }
+    };
+
+    function createPersilPopupContent(index = 0) {
+      if (currentPersilFeatures.length === 0) return '';
+      const feature = currentPersilFeatures[index];
+      const properties = feature.properties;
+      const total = currentPersilFeatures.length;
+      highlightAndZoomToPersil(feature);
+      const nib = properties.nib || properties.NIB || properties.nomor_identitas_bidang || '-';
+      const tipeHak = properties.tipe_hak || properties.TIPE_HAK || properties.jenis_hak || '-';
+      const nomorHak = formatNomorHak(properties.nomor || properties.NOMOR || properties.nomor_hak || '');
+      const luas = properties.luas || properties.LUAS || properties.luas_bidang || 0;
+      const tahun = properties.tahun || properties.TAHUN || properties.tahun_terbit || '-';
+      let content = `<div class="popup-section"><div class="popup-section-title persil">📍 Data Bidang Tanah</div>`;
+      if (total > 1) {
+        content += `
+          <div class="feature-navigation">
+            <button class="nav-btn" id="btn-prev-persil" ${index === 0 ? 'disabled' : ''}>◄</button>
+            <span class="nav-info">${index + 1} dari ${total}</span>
+            <button class="nav-btn" id="btn-next-persil" ${index === total - 1 ? 'disabled' : ''}>►</button>
+          </div>
+        `;
+      }
+      content += `
+        <div class="popup-row"><span class="popup-label">🆔 NIB:</span><span class="popup-value">${nib}</span></div>
+        <div class="popup-row"><span class="popup-label">📋 Tipe Hak:</span><span class="popup-value">${tipeHak}</span></div>
+        <div class="popup-row"><span class="popup-label">📄 No. Hak:</span><span class="popup-value">${nomorHak}</span></div>
+        <div class="popup-row"><span class="popup-label">📏 Luas:</span><span class="popup-value">${parseFloat(luas).toLocaleString('id-ID', {minimumFractionDigits: 0, maximumFractionDigits: 2})} m²</span></div>
+        <div class="popup-row"><span class="popup-label">📅 Tahun:</span><span class="popup-value">${tahun}</span></div>
+      </div>`;
+      return content;
+    }
+
+    function attachNavigationListeners() {
+      setTimeout(() => {
+        const prevBtn = document.getElementById('btn-prev-persil');
+        const nextBtn = document.getElementById('btn-next-persil');
+        if (prevBtn) {
+          prevBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            navigatePersil('prev');
+          };
+        }
+        if (nextBtn) {
+          nextBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            navigatePersil('next');
+          };
+        }
+      }, 100);
+    }
+
+    function updatePersilPopup(newIndex) {
+      currentPersilIndex = newIndex;
+      if (currentPopup) {
+        const newContent = createPersilPopupContent(currentPersilIndex);
+        const fullContent = `
+          <div class="popup-header persil">
+            <span>📍 Informasi Lokasi</span>
+            <span class="close-btn" onclick="closeCurrentPopup()">✕</span>
+          </div>
+          <div class="popup-body">${newContent}</div>
+        `;
+        currentPopup.setContent(fullContent);
+        attachNavigationListeners();
+      }
+    }
+
+    window.closeCurrentPopup = function() {
+      if (currentPopup) map.closePopup(currentPopup);
+      if (highlightLayer) {
+        map.removeLayer(highlightLayer);
+        highlightLayer = null;
+      }
+      currentPersilFeatures = [];
+      currentPersilIndex = 0;
+      currentPopup = null;
+    };
+
+    function queryBhumiPersil(latlng) {
+      const point = map.latLngToContainerPoint(latlng);
+      const size = map.getSize();
+      const bounds = map.getBounds();
+      const sw = map.options.crs.project(bounds.getSouthWest());
+      const ne = map.options.crs.project(bounds.getNorthEast());
+      const bbox = [sw.x, sw.y, ne.x, ne.y].join(',');
+      const params = {
+        SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
+        LAYERS: 'bhumi_persil', QUERY_LAYERS: 'bhumi_persil',
+        INFO_FORMAT: 'application/json', FEATURE_COUNT: 50,
+        I: Math.floor(point.x), J: Math.floor(point.y),
+        CRS: 'EPSG:3857', WIDTH: size.x, HEIGHT: size.y, BBOX: bbox
+      };
+      const queryString = Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
+      const url = 'https://bhumi.atrbpn.go.id/mprx/service?' + queryString;
+      return fetch(url).then(response => {
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response.json();
+      }).catch(error => {
+        console.error('Error querying BHUMI Persil:', error);
+        return null;
+      });
+    }
+
+    function queryArcGIS(url, layerId, latlng) {
+      const earthRadius = 6378137;
+      const lat = Math.max(Math.min(latlng.lat, 89.99999), -89.99999);
+      const x = earthRadius * latlng.lng * Math.PI / 180;
+      const y = earthRadius * Math.log(Math.tan((90 + lat) * Math.PI / 360));
+      const identifyUrl = url.replace('/export', '/identify');
+      const params = {
+        f: 'json',
+        geometry: `{"x":${x},"y":${y},"spatialReference":{"wkid":102100}}`,
+        geometryType: 'esriGeometryPoint', sr: '102100', layers: `all:${layerId}`,
+        tolerance: 5, mapExtent: map.getBounds().toBBoxString(),
+        imageDisplay: `${map.getSize().x},${map.getSize().y},96`,
+        returnGeometry: true
+      };
+      const queryString = Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
+      return fetch(`${identifyUrl}?${queryString}`).then(response => response.json()).catch(error => {
+        console.error('Error querying ArcGIS:', error);
+        return null;
+      });
+    }
+
+    function queryKawasanHutan(latlng) {
+      const earthRadius = 6378137;
+      const lat = Math.max(Math.min(latlng.lat, 89.99999), -89.99999);
+      const x = earthRadius * latlng.lng * Math.PI / 180;
+      const y = earthRadius * Math.log(Math.tan((90 + lat) * Math.PI / 360));
+      const identifyUrl = 'https://geoportal.menlhk.go.id/server/rest/services/jsdgejawfvrdtasdt/KWS_HUTAN/MapServer/identify';
+      const params = {
+        f: 'json',
+        geometry: `{"x":${x},"y":${y},"spatialReference":{"wkid":102100}}`,
+        geometryType: 'esriGeometryPoint', sr: '102100', layers: 'all',
+        tolerance: 5, mapExtent: map.getBounds().toBBoxString(),
+        imageDisplay: `${map.getSize().x},${map.getSize().y},96`,
+        returnGeometry: true
+      };
+      const queryString = Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
+      return fetch(`${identifyUrl}?${queryString}`).then(response => {
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response.json();
+      }).catch(error => {
+        console.error('Error querying Kawasan Hutan:', error);
+        return null;
+      });
+    }
+
+    function updateMapCursor() {
+      if (isBhumiLayerActive || isRTRWLayerActive || isRDTRLayerActive || isHutanLayerActive) {
+        document.getElementById('map').classList.add('clickable');
+      } else {
+        document.getElementById('map').classList.remove('clickable');
+      }
+    }
+
+    map.on('click', function(e) {
+      closeCurrentPopup();
+      const activeLayers = [];
+      if (isBhumiLayerActive) activeLayers.push('Persil');
+      if (isRTRWLayerActive) activeLayers.push('RTRW');
+      if (isRDTRLayerActive) activeLayers.push('RDTR');
+      if (isHutanLayerActive) activeLayers.push('Hutan');
+
+      if (activeLayers.length === 0) {
+        L.popup({ className: 'custom-popup' }).setLatLng(e.latlng).setContent(`
+          <div class="popup-header"><span>⚠️ Layer Tidak Aktif</span><span class="close-btn" onclick="closeCurrentPopup()">✕</span></div>
+          <div class="popup-body"><div class="popup-warning">Tidak ada layer yang aktif.</div></div>
+        `).openOn(map);
+        return;
+      }
+
+      const loadingPopup = L.popup({ 
+        className: 'custom-popup',
+        maxWidth: isMobile ? window.innerWidth - 20 : 450,
+        minWidth: isMobile ? 260 : 300,
+        closeButton: false, autoPan: true, autoPanPadding: [10, 10]
+      }).setLatLng(e.latlng).setContent(`
+        <div class="popup-header"><span>📍 Memuat Data...</span><span class="close-btn" onclick="closeCurrentPopup()">✕</span></div>
+        <div class="popup-body"><div class="popup-loading"><div class="spinner"></div><p>Mohon tunggu...</p></div></div>
+      `).openOn(map);
+
+      currentPopup = loadingPopup;
+      const queries = [];
+
+      if (isBhumiLayerActive) queries.push(queryBhumiPersil(e.latlng).then(data => ({ type: 'PERSIL', data })));
+      if (isRTRWLayerActive) queries.push(queryArcGIS('https://gistaru.atrbpn.go.id/proxy_rtronline/run.ashx?https://gistaru.atrbpn.go.id/arcgis/rest/services/027_RTR_KABUPATEN_KOTA_PROVINSI_NUSA_TENGGARA_BARAT/_5200_NUSA_TENGGARA_BARAT_PR_PERDA/MapServer/export', 3, e.latlng).then(data => ({ type: 'RTRW', data })));
+      if (isRDTRLayerActive) queries.push(queryArcGIS('https://gistaru.atrbpn.go.id/proxy_rtronline/run.ashx?https://gistaru.atrbpn.go.id/arcgis/rest/services/061_RDTR_PROVINSI_NUSA_TENGGARA_BARAT/_RDTR_52A8_KAWASAN_PERKOTAAN_SUMBAWA_BESAR/MapServer/export', 0, e.latlng).then(data => ({ type: 'RDTR', data })));
+      if (isHutanLayerActive) queries.push(queryKawasanHutan(e.latlng).then(data => ({ type: 'HUTAN', data })));
+
+      Promise.all(queries).then(results => {
+        let popupBody = '';
+        let hasData = false;
+        let sectionsCount = 0;
+
+        results.forEach(result => {
+          if (result.type === 'PERSIL' && result.data && result.data.features && result.data.features.length > 0) {
+            hasData = true;
+            sectionsCount++;
+            currentPersilFeatures = result.data.features;
+            currentPersilIndex = 0;
+            popupBody += createPersilPopupContent(0);
+          }
+
+          if (result.type === 'RTRW' && result.data && result.data.results && result.data.results.length > 0) {
+            hasData = true;
+            sectionsCount++;
+            const feature = result.data.results[0];
+            const attributes = feature.attributes;
+            popupBody += `<div class="popup-section"><div class="popup-section-title">🏛️ RTRW</div>`;
+            for (let key in attributes) {
+              if (attributes.hasOwnProperty(key) && attributes[key]) {
+                let label = key.replace(/_/g, ' ').toUpperCase();
+                let value = attributes[key];
+                if (key.toLowerCase().includes('luas') && !isNaN(value)) {
+                  value = parseFloat(value).toLocaleString('id-ID') + ' m²';
+                }
+                popupBody += `<div class="popup-row"><span class="popup-label">${label}:</span><span class="popup-value">${value}</span></div>`;
+              }
+            }
+            popupBody += `</div>`;
+          }
+
+          if (result.type === 'RDTR' && result.data && result.data.results && result.data.results.length > 0) {
+            hasData = true;
+            sectionsCount++;
+            const feature = result.data.results[0];
+            const attributes = feature.attributes;
+            popupBody += `<div class="popup-section"><div class="popup-section-title rdtr">🏙️ RDTR</div>`;
+            for (let key in attributes) {
+              if (attributes.hasOwnProperty(key) && attributes[key]) {
+                let label = key.replace(/_/g, ' ').toUpperCase();
+                let value = attributes[key];
+                if (key.toLowerCase().includes('luas') && !isNaN(value)) {
+                  value = parseFloat(value).toLocaleString('id-ID') + ' m²';
+                }
+                popupBody += `<div class="popup-row"><span class="popup-label">${label}:</span><span class="popup-value">${value}</span></div>`;
+              }
+            }
+            popupBody += `</div>`;
+          }
+
+          if (result.type === 'HUTAN' && result.data && result.data.results && result.data.results.length > 0) {
+            hasData = true;
+            sectionsCount++;
+            const feature = result.data.results[0];
+            const attributes = feature.attributes;
+            popupBody += `<div class="popup-section"><div class="popup-section-title hutan">🌲 Kawasan Hutan</div>`;
+            for (let key in attributes) {
+              if (attributes.hasOwnProperty(key) && attributes[key] !== null && attributes[key] !== '') {
+                let label = key.replace(/_/g, ' ').toUpperCase();
+                let value = attributes[key];
+                if (key.toLowerCase().includes('luas') && !isNaN(value)) {
+                  value = parseFloat(value).toLocaleString('id-ID') + ' Ha';
+                }
+                popupBody += `<div class="popup-row"><span class="popup-label">${label}:</span><span class="popup-value">${value}</span></div>`;
+              }
+            }
+            popupBody += `</div>`;
+          }
+        });
+
+        if (!hasData) {
+          popupBody = `<div class="popup-error">⚠️ Tidak ada data di lokasi ini.</div>`;
+        }
+
+        popupBody += `<div class="popup-row" style="border-top: 2px solid #ddd; padding-top: 8px; margin-top: 10px;"><span class="popup-label">📍 Koordinat:</span><span class="popup-value">${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</span></div>`;
+        const scrollHint = sectionsCount > 1 ? '<div class="scroll-hint">⬇️ Geser untuk melihat lebih banyak ⬇️</div>' : '';
+        const popupContent = `<div class="popup-header"><span>📍 Informasi</span><span class="close-btn" onclick="closeCurrentPopup()">✕</span></div><div class="popup-body">${popupBody}</div>${scrollHint}`;
+        loadingPopup.setContent(popupContent);
+        attachNavigationListeners();
+      });
+    });
+
+    map.on('popupclose', function() {
+      if (highlightLayer) {
+        map.removeLayer(highlightLayer);
+        highlightLayer = null;
+      }
+      currentPersilFeatures = [];
+      currentPersilIndex = 0;
+      currentPopup = null;
+    });
+
+    // Info box
+    const infoBox = L.control({ position: "bottomleft" });
+    infoBox.onAdd = function () {
+      const div = L.DomUtil.create("div", "info-box");
+      div.id = 'info-box-content';
+      div.innerHTML = `
+        <strong>📊 Info Peta</strong>
+        <div class="info-item">📍 <span id="coords">-</span></div>
+        <div class="info-item">🔍 Zoom: <span id="zoom-level">${map.getZoom()}</span></div>
+        <div class="info-item" style="margin-top: 4px; padding-top: 4px; border-top: 1px solid #ddd;">💡 Klik peta untuk info RTR</div>
+      `;
+      return div;
+    };
+    infoBox.addTo(map);
+
+    map.on('mousemove', function(e) {
+      const coordsEl = document.getElementById('coords');
+      if (coordsEl) coordsEl.textContent = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+    });
+
+    map.on('zoomend', function() {
+      const zoomEl = document.getElementById('zoom-level');
+      if (zoomEl) zoomEl.textContent = map.getZoom();
+    });
+
+    L.control.scale({ metric: true, imperial: false, position: 'bottomleft', maxWidth: isMobile ? 100 : 150 }).addTo(map);
+
+    updateMapCursor();
+
+    console.log('🗺️ Peta berhasil dimuat!');
+    console.log('📱 Mode:', isMobile ? 'Mobile' : 'Desktop');
+    console.log('✅ Default: Persil Tanah aktif');
+    console.log('🎯 Basemap selalu di bawah dengan z-index = 1');
+  </script>
+
+</body>
+</html>
